@@ -1,0 +1,59 @@
+name: Keep QBVision Awake
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  visit-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Open QBVision
+        run: |
+          python - <<'PY'
+          import re
+          from playwright.sync_api import sync_playwright
+
+          APP_URL = "https://qbvision.streamlit.app/"
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              page = browser.new_page()
+
+              page.goto(
+                  APP_URL,
+                  wait_until="domcontentloaded",
+                  timeout=120000
+              )
+
+              wake_button = page.get_by_role(
+                  "button",
+                  name=re.compile("get this app back up", re.I)
+              )
+
+              if wake_button.count() > 0:
+                  print("App is sleeping. Waking it up.")
+                  wake_button.first.click()
+                  page.wait_for_timeout(60000)
+              else:
+                  print("App is already running.")
+                  page.wait_for_timeout(45000)
+
+              print("Final URL:", page.url)
+              print("Page title:", page.title())
+
+              browser.close()
+          PY
